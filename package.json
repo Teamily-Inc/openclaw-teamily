@@ -1,6 +1,6 @@
 {
   "name": "@teamilyai/teamily",
-  "version": "1.0.3-beta.5",
+  "version": "1.1.0",
   "description": "OpenClaw Teamily channel plugin - Team instant messaging server integration",
   "keywords": [
     "channel",
@@ -16,7 +16,7 @@
   "author": "teamilyai",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/teamilyai/openclaw.git",
+    "url": "git+https://github.com/Teamily-Inc/openclaw-teamily.git",
     "directory": "extensions/teamily"
   },
   "files": [
