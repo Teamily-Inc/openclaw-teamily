@@ -25,6 +25,7 @@ type SdkInstance = ReturnType<SdkModule["getSDK"]>;
 // chunks). FileReader is a browser-only API not available in Node.js, so we
 // provide a minimal polyfill that delegates to Blob.prototype.arrayBuffer().
 if (typeof globalThis.FileReader === "undefined") {
+  console.warn("[teamily] Polyfilling globalThis.FileReader for OpenIM SDK (Node.js environment)");
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   (globalThis as any).FileReader = class FileReader {
     result: ArrayBuffer | null = null;
@@ -131,7 +132,9 @@ export class TeamilyMonitor {
         if (msg.sendID === this.account.userID) continue;
         const converted = convertSdkMessage(msg, this.account.userID);
         if (converted) {
-          void this.onMessage(converted);
+          Promise.resolve(this.onMessage(converted)).catch((err) => {
+            console.error(`[teamily] onMessage handler error:`, err);
+          });
         }
       }
     });
@@ -168,13 +171,7 @@ export class TeamilyMonitor {
   async sendText(target: TeamilyMessageTarget, text: string): Promise<string> {
     const sdk = this.requireSdk();
     const created = await sdk.createTextMessage(text);
-    const message = created.data;
-    const result = await sdk.sendMessage({
-      recvID: target.type === "user" ? target.id : "",
-      groupID: target.type === "group" ? target.id : "",
-      message,
-    });
-    return result.data?.serverMsgID || result.data?.clientMsgID || "";
+    return this.dispatchMessage(sdk, target, created.data);
   }
 
   /** Send an image message through the SDK WebSocket connection. */
@@ -187,12 +184,7 @@ export class TeamilyMonitor {
       snapshotPicture: { ...picInfo, url: "" },
       sourcePath: "",
     });
-    const result = await sdk.sendMessage({
-      recvID: target.type === "user" ? target.id : "",
-      groupID: target.type === "group" ? target.id : "",
-      message: created.data,
-    });
-    return result.data?.serverMsgID || result.data?.clientMsgID || "";
+    return this.dispatchMessage(sdk, target, created.data);
   }
 
   /** Send a video message through the SDK WebSocket connection. */
@@ -212,12 +204,7 @@ export class TeamilyMonitor {
       snapshotWidth: 0,
       snapshotHeight: 0,
     });
-    const result = await sdk.sendMessage({
-      recvID: target.type === "user" ? target.id : "",
-      groupID: target.type === "group" ? target.id : "",
-      message: created.data,
-    });
-    return result.data?.serverMsgID || result.data?.clientMsgID || "";
+    return this.dispatchMessage(sdk, target, created.data);
   }
 
   /** Send a sound/audio message through the SDK WebSocket connection. */
@@ -230,12 +217,7 @@ export class TeamilyMonitor {
       dataSize: 0,
       duration: 0,
     });
-    const result = await sdk.sendMessage({
-      recvID: target.type === "user" ? target.id : "",
-      groupID: target.type === "group" ? target.id : "",
-      message: created.data,
-    });
-    return result.data?.serverMsgID || result.data?.clientMsgID || "";
+    return this.dispatchMessage(sdk, target, created.data);
   }
 
   /** Send a file message through the SDK WebSocket connection. */
@@ -248,12 +230,7 @@ export class TeamilyMonitor {
       sourceUrl: url,
       fileSize: 0,
     });
-    const result = await sdk.sendMessage({
-      recvID: target.type === "user" ? target.id : "",
-      groupID: target.type === "group" ? target.id : "",
-      message: created.data,
-    });
-    return result.data?.serverMsgID || result.data?.clientMsgID || "";
+    return this.dispatchMessage(sdk, target, created.data);
   }
 
   // ---- Buffer-based send methods (local file → SDK upload) ----
@@ -284,12 +261,7 @@ export class TeamilyMonitor {
       sourcePath: "",
       file,
     });
-    const result = await sdk.sendMessage({
-      recvID: target.type === "user" ? target.id : "",
-      groupID: target.type === "group" ? target.id : "",
-      message: created.data,
-    });
-    return result.data?.serverMsgID || result.data?.clientMsgID || "";
+    return this.dispatchMessage(sdk, target, created.data);
   }
 
   /** Send a video from a local buffer. SDK handles the upload to object storage. */
@@ -333,12 +305,7 @@ export class TeamilyMonitor {
       videoFile,
       snapshotFile,
     });
-    const result = await sdk.sendMessage({
-      recvID: target.type === "user" ? target.id : "",
-      groupID: target.type === "group" ? target.id : "",
-      message: created.data,
-    });
-    return result.data?.serverMsgID || result.data?.clientMsgID || "";
+    return this.dispatchMessage(sdk, target, created.data);
   }
 
   /** Send an audio/sound from a local buffer. SDK handles the upload to object storage. */
@@ -358,12 +325,7 @@ export class TeamilyMonitor {
       duration: 0,
       file,
     });
-    const result = await sdk.sendMessage({
-      recvID: target.type === "user" ? target.id : "",
-      groupID: target.type === "group" ? target.id : "",
-      message: created.data,
-    });
-    return result.data?.serverMsgID || result.data?.clientMsgID || "";
+    return this.dispatchMessage(sdk, target, created.data);
   }
 
   /** Send a document/file from a local buffer. SDK handles the upload to object storage. */
@@ -383,10 +345,19 @@ export class TeamilyMonitor {
       fileSize: buffer.length,
       file,
     });
+    return this.dispatchMessage(sdk, target, created.data);
+  }
+
+  /** Send a created message to the target and return the server message ID. */
+  private async dispatchMessage(
+    sdk: SdkInstance,
+    target: TeamilyMessageTarget,
+    message: unknown,
+  ): Promise<string> {
     const result = await sdk.sendMessage({
       recvID: target.type === "user" ? target.id : "",
       groupID: target.type === "group" ? target.id : "",
-      message: created.data,
+      message,
     });
     return result.data?.serverMsgID || result.data?.clientMsgID || "";
   }
@@ -483,17 +454,22 @@ export function startTeamilyMonitoring(
   account: ResolvedTeamilyAccount,
   onMessage: TeamilyMessageHandler,
   onStateChange?: (state: TeamilyConnectionState, error?: string) => void,
-): () => void {
+): { stop: () => void; ready: Promise<void> } {
   const monitor = new TeamilyMonitor({ account, onMessage, onStateChange });
   monitors.set(account.accountId, monitor);
-  monitor.start().catch((err) => {
-    console.error(`Teamily monitor start failed for ${account.accountId}:`, err);
+
+  const ready = monitor.start().catch((err) => {
+    console.error(`[teamily] Monitor start failed for ${account.accountId}:`, err);
+    monitors.delete(account.accountId);
+    throw err;
   });
 
-  return () => {
+  const stop = () => {
     monitor.stop();
     monitors.delete(account.accountId);
   };
+
+  return { stop, ready };
 }
 
 export function stopTeamilyMonitoring(accountId: string): void {

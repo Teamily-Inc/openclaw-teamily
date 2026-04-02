@@ -1,6 +1,6 @@
 {
   "name": "@teamilyai/teamily",
-  "version": "1.0.2",
+  "version": "1.0.3-beta.5",
   "description": "OpenClaw Teamily channel plugin - Team instant messaging server integration",
   "keywords": [
     "channel",
@@ -31,7 +31,7 @@
     "zod": "^4.3.6"
   },
   "peerDependencies": {
-    "openclaw": ">=2026.3.8"
+    "openclaw": ">=2026.3.22"
   },
   "peerDependenciesMeta": {
     "openclaw": {
@@ -55,7 +55,8 @@
     "install": {
       "npmSpec": "@teamilyai/teamily",
       "localPath": "extensions/teamily",
-      "defaultChoice": "npm"
+      "defaultChoice": "npm",
+      "minHostVersion": ">=2026.3.22"
     }
   }
 }

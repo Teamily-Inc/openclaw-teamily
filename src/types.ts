@@ -15,6 +15,7 @@ export interface TeamilyUserAccount {
   token: string;
   nickname?: string;
   faceURL?: string;
+  enabled?: boolean;
   dm?: TeamilyDmConfig;
 }
 

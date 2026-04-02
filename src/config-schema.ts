@@ -1,5 +1,3 @@
-import type { ChannelConfigSchema } from "openclaw/plugin-sdk";
-import { buildChannelConfigSchema } from "openclaw/plugin-sdk";
 import { z } from "zod";
 import type { TeamilyConfig } from "./types.js";
 
@@ -24,6 +22,7 @@ export const TeamilyUserAccountSchema = z.object({
   token: z.string().min(1).describe("User token for authentication"),
   nickname: z.string().optional().describe("Display nickname for the bot"),
   faceURL: z.string().url().optional().describe("Avatar URL for the bot"),
+  enabled: z.boolean().optional().describe("Whether this account is enabled"),
   dm: TeamilyDmConfigSchema.optional().describe("Per-account DM security settings"),
 });
 
@@ -37,10 +36,6 @@ export const TeamilyConfigSchema = z.object({
     .describe("Teamily bot accounts"),
   dm: TeamilyDmConfigSchema.optional().describe("Channel-level DM security settings"),
 });
-
-export const TeamilyChannelConfigSchema = buildChannelConfigSchema(
-  TeamilyConfigSchema,
-) as ChannelConfigSchema;
 
 export type CoreConfig = {
   channels?: {

@@ -1,28 +1,30 @@
 import path from "node:path";
+import type { ChannelPlugin, ChannelStatusIssue } from "openclaw/plugin-sdk";
+import { createScopedAccountConfigAccessors } from "openclaw/plugin-sdk/channel-config-helpers";
+import { buildChannelConfigSchema } from "openclaw/plugin-sdk/channel-config-schema";
+import { buildAccountScopedDmSecurityPolicy } from "openclaw/plugin-sdk/channel-policy";
+import { PAIRING_APPROVED_MESSAGE } from "openclaw/plugin-sdk/channel-status";
 import {
-  applyAccountNameToChannelSection,
-  buildChannelConfigSchema,
+  deleteAccountFromConfigSection,
+  setAccountEnabledInConfigSection,
+} from "openclaw/plugin-sdk/core";
+import {
   buildPendingHistoryContextFromMap,
   clearHistoryEntriesIfEnabled,
-  DEFAULT_ACCOUNT_ID,
   DEFAULT_GROUP_HISTORY_LIMIT,
-  deleteAccountFromConfigSection,
-  normalizeAccountId,
-  PAIRING_APPROVED_MESSAGE,
   recordPendingHistoryEntryIfEnabled,
-  setAccountEnabledInConfigSection,
-  type ChannelPlugin,
-  type ChannelOutboundContext,
-  type ChannelStatusIssue,
   type HistoryEntry,
-  loadOutboundMediaFromUrl,
+} from "openclaw/plugin-sdk/reply-history";
+import {
   resolveOutboundMediaUrls,
   sendMediaWithLeadingCaption,
-} from "openclaw/plugin-sdk";
+} from "openclaw/plugin-sdk/reply-payload";
 import {
-  buildAccountScopedDmSecurityPolicy,
-  createScopedAccountConfigAccessors,
-} from "openclaw/plugin-sdk/compat";
+  applyAccountNameToChannelSection,
+  DEFAULT_ACCOUNT_ID,
+  normalizeAccountId,
+} from "openclaw/plugin-sdk/setup";
+import { loadWebMedia } from "openclaw/plugin-sdk/web-media";
 import {
   listTeamilyAccountIds,
   resolveDefaultTeamilyAccountId,
@@ -177,14 +179,14 @@ export const teamilyPlugin: ChannelPlugin<ResolvedTeamilyAccount> = {
         return { ok: false, error: err instanceof Error ? err : new Error(String(err)) };
       }
     },
-    sendText: async (ctx: ChannelOutboundContext) => {
+    sendText: async (ctx) => {
       const { to, text, accountId } = ctx;
       const monitor = requireMonitor(accountId);
       const target = normalizeTeamilyTarget(to);
       const messageId = await monitor.sendText(target, text);
       return { channel: "teamily" as const, messageId };
     },
-    sendMedia: async (ctx: ChannelOutboundContext) => {
+    sendMedia: async (ctx) => {
       const { to, accountId } = ctx;
       const mediaUrl = ctx.mediaUrl;
       if (!mediaUrl) {
@@ -196,8 +198,8 @@ export const teamilyPlugin: ChannelPlugin<ResolvedTeamilyAccount> = {
       // Local file path: load buffer and send via SDK's *ByFile methods
       // (SDK handles the upload internally, like Telegram's InputFile).
       if (isLocalMediaPath(mediaUrl)) {
-        const media = await loadOutboundMediaFromUrl(mediaUrl, {
-          mediaLocalRoots: ctx.mediaLocalRoots,
+        const media = await loadWebMedia(mediaUrl, {
+          localRoots: ctx.mediaLocalRoots,
         });
         const fileName = media.fileName || path.basename(mediaUrl) || "media";
         const contentType = media.contentType || guessContentType(mediaUrl);
@@ -270,7 +272,7 @@ export const teamilyPlugin: ChannelPlugin<ResolvedTeamilyAccount> = {
       const historyLimit = DEFAULT_GROUP_HISTORY_LIMIT; // 50 messages per group
       const groupHistories = new Map<string, HistoryEntry[]>();
 
-      const stopFn = startTeamilyMonitoring(account, async (message) => {
+      const { stop: stopFn, ready } = startTeamilyMonitoring(account, async (message) => {
         try {
           const rt = getTeamilyRuntime();
           const currentCfg = rt.config.loadConfig();
@@ -388,10 +390,10 @@ export const teamilyPlugin: ChannelPlugin<ResolvedTeamilyAccount> = {
                 if (!monitor)
                   throw new Error(`Teamily monitor not running for account ${accountId}`);
                 const target = normalizeTeamilyTarget(replyTarget);
-                const replyText =
-                  ((payload as Record<string, unknown>)?.text as string | undefined) ??
-                  ((payload as Record<string, unknown>)?.body as string | undefined) ??
-                  "";
+                const raw = payload as Record<string, unknown>;
+                const rawText = typeof raw?.text === "string" ? raw.text : undefined;
+                const rawBody = typeof raw?.body === "string" ? raw.body : undefined;
+                const replyText = rawText ?? rawBody ?? "";
 
                 // Send media attachments (first with caption, rest without).
                 const mediaUrls = resolveOutboundMediaUrls(payload as Record<string, unknown>);
@@ -442,6 +444,10 @@ export const teamilyPlugin: ChannelPlugin<ResolvedTeamilyAccount> = {
           );
         }
       });
+
+      // Wait for the SDK to connect and authenticate before blocking.
+      // If login fails, this throws and the gateway marks the account as errored.
+      await ready;
 
       // Respect abort signal from the gateway framework
       ctx.abortSignal.addEventListener("abort", () => {
@@ -547,7 +553,7 @@ async function loadAndSendMedia(
   mediaUrl: string,
 ): Promise<void> {
   if (isLocalMediaPath(mediaUrl)) {
-    const media = await loadOutboundMediaFromUrl(mediaUrl);
+    const media = await loadWebMedia(mediaUrl);
     const fileName = media.fileName || path.basename(mediaUrl) || "media";
     const contentType = media.contentType || guessContentType(mediaUrl);
     await sendMediaBuffer(monitor, target, media.buffer, fileName, contentType, mediaUrl);

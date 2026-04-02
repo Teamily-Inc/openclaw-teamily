@@ -37,7 +37,7 @@ export function resolveTeamilyAccount(
 
   return {
     accountId: targetAccountId,
-    enabled: true,
+    enabled: account.enabled !== false,
     apiURL: config.server.apiURL,
     wsURL: config.server.wsURL,
     userID: account.userID,
