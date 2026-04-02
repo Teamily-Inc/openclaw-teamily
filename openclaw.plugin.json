@@ -1,0 +1,9 @@
+{
+  "id": "teamily",
+  "channels": ["teamily"],
+  "configSchema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {}
+  }
+}

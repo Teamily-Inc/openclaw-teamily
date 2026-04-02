@@ -1,0 +1,61 @@
+{
+  "name": "@teamilyai/teamily",
+  "version": "1.0.2",
+  "description": "OpenClaw Teamily channel plugin - Team instant messaging server integration",
+  "keywords": [
+    "channel",
+    "communication",
+    "messaging",
+    "openclaw",
+    "openim",
+    "plugin",
+    "team",
+    "teamily"
+  ],
+  "license": "MIT",
+  "author": "teamilyai",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/teamilyai/openclaw.git",
+    "directory": "extensions/teamily"
+  },
+  "files": [
+    "index.ts",
+    "openclaw.plugin.json",
+    "src/**/*.ts"
+  ],
+  "type": "module",
+  "main": "index.ts",
+  "dependencies": {
+    "@openim/client-sdk": "^3.8.3",
+    "zod": "^4.3.6"
+  },
+  "peerDependencies": {
+    "openclaw": ">=2026.3.8"
+  },
+  "peerDependenciesMeta": {
+    "openclaw": {
+      "optional": true
+    }
+  },
+  "openclaw": {
+    "extensions": [
+      "./index.ts"
+    ],
+    "channel": {
+      "id": "teamily",
+      "label": "Teamily",
+      "selectionLabel": "Teamily (self-hosted)",
+      "docsPath": "/channels/teamily",
+      "docsLabel": "teamily",
+      "blurb": "Team instant messaging server",
+      "order": 75,
+      "quickstartAllowFrom": true
+    },
+    "install": {
+      "npmSpec": "@teamilyai/teamily",
+      "localPath": "extensions/teamily",
+      "defaultChoice": "npm"
+    }
+  }
+}
